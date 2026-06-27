@@ -1,0 +1,18 @@
+# Render Blueprint — deploys the Stock Advisor engine as a web service.
+# In Render: New → Blueprint → point at this repo. Set the two `sync: false`
+# secrets in the dashboard after the first deploy.
+services:
+  - type: web
+    name: stock-advisor-engine
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ENGINE_SHARED_SECRET
+        sync: false
+      - key: DEFAULT_MARKET
+        value: IN_NSE
