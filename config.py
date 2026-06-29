@@ -23,6 +23,16 @@ def resolve_model(requested: str | None) -> str:
         return requested
     return CLAUDE_MODEL
 
+
+# --- Research bounds (latency + cost) --------------------------------------
+# Cap the server-side web search so a single request can't run for minutes
+# (which both blows the portal's request timeout and runs up the bill).
+WEB_SEARCH_MAX_USES = 5
+
+# Thinking depth: "low" | "medium" | "high". Lower = faster + cheaper. Medium
+# is plenty for a shortlist; bump to "high" if you want deeper reasoning.
+EFFORT = "medium"
+
 # Number of picks to ask the model for.
 NUM_PICKS = 10
 

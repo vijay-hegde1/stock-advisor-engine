@@ -93,7 +93,15 @@ def recommend(profile: dict, model: str | None = None) -> dict:
     client = _get_client()
     model = model or config.CLAUDE_MODEL
     messages = [{"role": "user", "content": _build_prompt(profile)}]
-    tools = [{"type": "web_search_20260209", "name": "web_search"}]
+    # Cap web search so the server-side research loop stays bounded — keeps the
+    # call within the portal's request timeout and controls cost.
+    tools = [
+        {
+            "type": "web_search_20260209",
+            "name": "web_search",
+            "max_uses": config.WEB_SEARCH_MAX_USES,
+        }
+    ]
 
     # Server-side web search runs its own loop; it may return pause_turn when it
     # hits the per-turn tool-use limit. Re-send to let it continue.
@@ -102,6 +110,7 @@ def recommend(profile: dict, model: str | None = None) -> dict:
             model=model,
             max_tokens=config.MAX_TOKENS,
             thinking={"type": "adaptive"},
+            output_config={"effort": config.EFFORT},
             tools=tools,
             messages=messages,
         )
