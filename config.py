@@ -7,8 +7,21 @@ model, markets, or pick count here.
 import os
 
 # --- Claude model -----------------------------------------------------------
+# Default model, used when the portal doesn't request a specific one.
 CLAUDE_MODEL = "claude-opus-4-8"
 MAX_TOKENS = 16000
+
+# Models the portal Admin console is allowed to select. Anything outside this
+# set (or missing) falls back to CLAUDE_MODEL — the portal can never make the
+# engine run an arbitrary/unintended model.
+ALLOWED_MODELS = {"claude-opus-4-8", "claude-sonnet-4-6"}
+
+
+def resolve_model(requested: str | None) -> str:
+    """Return the requested model if it's allowed, else the default."""
+    if requested and requested in ALLOWED_MODELS:
+        return requested
+    return CLAUDE_MODEL
 
 # Number of picks to ask the model for.
 NUM_PICKS = 10

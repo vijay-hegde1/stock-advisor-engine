@@ -84,12 +84,14 @@ def _parse_picks(text: str) -> dict:
     return json.loads(raw)
 
 
-def recommend(profile: dict) -> dict:
+def recommend(profile: dict, model: str | None = None) -> dict:
     """Run the research + recommendation loop and return parsed results.
 
+    `model` selects the Claude model (defaults to config.CLAUDE_MODEL).
     Returns a dict: {"picks": [...], "summary": str}.
     """
     client = _get_client()
+    model = model or config.CLAUDE_MODEL
     messages = [{"role": "user", "content": _build_prompt(profile)}]
     tools = [{"type": "web_search_20260209", "name": "web_search"}]
 
@@ -97,7 +99,7 @@ def recommend(profile: dict) -> dict:
     # hits the per-turn tool-use limit. Re-send to let it continue.
     for _ in range(6):
         response = client.messages.create(
-            model=config.CLAUDE_MODEL,
+            model=model,
             max_tokens=config.MAX_TOKENS,
             thinking={"type": "adaptive"},
             tools=tools,

@@ -28,6 +28,9 @@ class Profile(BaseModel):
     lumpsum: str = "0"
     market: str = config.DEFAULT_MARKET
     sectors: str = ""
+    # Selected by the portal Admin console; validated against an allowlist
+    # (config.resolve_model) so it falls back to the default if unset/unknown.
+    model: Optional[str] = None
 
 
 def _check_secret(x_engine_key: Optional[str]) -> None:
@@ -57,7 +60,7 @@ def recommend(profile: Profile, x_engine_key: Optional[str] = Header(default=Non
     }
 
     try:
-        result = advisor.recommend(enriched_profile)
+        result = advisor.recommend(enriched_profile, model=config.resolve_model(profile.model))
         picks = market.enrich(result.get("picks", []), chosen["suffix"])
     except Exception as exc:  # surface a clean error to the portal
         raise HTTPException(status_code=502, detail=f"Engine error: {exc}")
