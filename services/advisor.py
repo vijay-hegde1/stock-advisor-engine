@@ -132,6 +132,7 @@ def recommend(profile: dict, model: str | None = None) -> dict:
     """
     client = _get_client()
     model = model or config.CLAUDE_MODEL
+    settings = config.get_model_settings(model)
     messages = [{"role": "user", "content": _build_prompt(profile)}]
     # Cap web search so the server-side research loop stays bounded — keeps the
     # call within the portal's request timeout and controls cost.
@@ -145,14 +146,14 @@ def recommend(profile: dict, model: str | None = None) -> dict:
 
     # Server-side web search runs its own loop; it may return pause_turn when it
     # hits the per-turn tool-use limit. Re-send to let it continue. Stream
-    # rather than block — config.MAX_TOKENS is large enough to risk an HTTP
-    # timeout on a non-streaming call.
+    # rather than block — settings["max_tokens"] can be large enough to risk
+    # an HTTP timeout on a non-streaming call.
     for _ in range(6):
         with client.messages.stream(
             model=model,
-            max_tokens=config.MAX_TOKENS,
+            max_tokens=settings["max_tokens"],
             thinking={"type": "adaptive"},
-            output_config={"effort": config.EFFORT},
+            output_config={"effort": settings["effort"]},
             tools=tools,
             messages=messages,
         ) as stream:
@@ -167,7 +168,7 @@ def recommend(profile: dict, model: str | None = None) -> dict:
             logger.warning(
                 "Stock Advisor: model=%s hit max_tokens (%d) before finishing.",
                 model,
-                config.MAX_TOKENS,
+                settings["max_tokens"],
             )
         break
 

@@ -9,12 +9,6 @@ import os
 # --- Claude model -----------------------------------------------------------
 # Default model, used when the portal doesn't request a specific one.
 CLAUDE_MODEL = "claude-opus-4-8"
-# Different models spend different amounts of output budget on thinking +
-# the web-search tool loop before writing the final answer; too tight a
-# ceiling truncates the response before it reaches the JSON block. 16000 was
-# cutting it close for some models — advisor.py streams the request, so a
-# larger ceiling doesn't risk an HTTP timeout.
-MAX_TOKENS = 32000
 
 # Models the portal Admin console is allowed to select. Anything outside this
 # set (or missing) falls back to CLAUDE_MODEL — the portal can never make the
@@ -34,9 +28,26 @@ def resolve_model(requested: str | None) -> str:
 # (which both blows the portal's request timeout and runs up the bill).
 WEB_SEARCH_MAX_USES = 5
 
-# Thinking depth: "low" | "medium" | "high". Lower = faster + cheaper. Medium
-# is plenty for a shortlist; bump to "high" if you want deeper reasoning.
-EFFORT = "medium"
+# Per-model max_tokens / thinking effort. Models differ in how much output
+# budget they spend on thinking + the web-search tool loop before writing the
+# final answer: Sonnet's loop runs longer than Opus's at the same effort, so
+# a shared setting either truncates Sonnet's answer (too few tokens) or blows
+# the portal's request timeout (too much thinking time). Give each model its
+# own budget instead of tuning one setting for both.
+#   - max_tokens: ceiling before a response gets truncated (stop_reason ==
+#     "max_tokens") before reaching the JSON block. Keep generous.
+#   - effort: "low" | "medium" | "high" — lower finishes faster, which
+#     matters more for a model whose loop already runs long.
+MODEL_SETTINGS = {
+    "claude-opus-4-8": {"max_tokens": 16000, "effort": "medium"},
+    "claude-sonnet-4-6": {"max_tokens": 32000, "effort": "low"},
+}
+DEFAULT_MODEL_SETTINGS = {"max_tokens": 16000, "effort": "medium"}
+
+
+def get_model_settings(model: str) -> dict:
+    """Return the {max_tokens, effort} budget for a model."""
+    return MODEL_SETTINGS.get(model, DEFAULT_MODEL_SETTINGS)
 
 # Number of picks to ask the model for.
 NUM_PICKS = 10
