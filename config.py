@@ -9,7 +9,12 @@ import os
 # --- Claude model -----------------------------------------------------------
 # Default model, used when the portal doesn't request a specific one.
 CLAUDE_MODEL = "claude-opus-4-8"
-MAX_TOKENS = 16000
+# Different models spend different amounts of output budget on thinking +
+# the web-search tool loop before writing the final answer; too tight a
+# ceiling truncates the response before it reaches the JSON block. 16000 was
+# cutting it close for some models — advisor.py streams the request, so a
+# larger ceiling doesn't risk an HTTP timeout.
+MAX_TOKENS = 32000
 
 # Models the portal Admin console is allowed to select. Anything outside this
 # set (or missing) falls back to CLAUDE_MODEL — the portal can never make the

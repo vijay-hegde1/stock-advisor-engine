@@ -144,19 +144,31 @@ def recommend(profile: dict, model: str | None = None) -> dict:
     ]
 
     # Server-side web search runs its own loop; it may return pause_turn when it
-    # hits the per-turn tool-use limit. Re-send to let it continue.
+    # hits the per-turn tool-use limit. Re-send to let it continue. Stream
+    # rather than block — config.MAX_TOKENS is large enough to risk an HTTP
+    # timeout on a non-streaming call.
     for _ in range(6):
-        response = client.messages.create(
+        with client.messages.stream(
             model=model,
             max_tokens=config.MAX_TOKENS,
             thinking={"type": "adaptive"},
             output_config={"effort": config.EFFORT},
             tools=tools,
             messages=messages,
-        )
+        ) as stream:
+            response = stream.get_final_message()
         if response.stop_reason == "pause_turn":
             messages.append({"role": "assistant", "content": response.content})
             continue
+        if response.stop_reason == "max_tokens":
+            # Truncated before finishing — the JSON block, if any, is almost
+            # certainly incomplete. Log it distinctly so this doesn't get
+            # confused with a plain formatting/parsing mismatch.
+            logger.warning(
+                "Stock Advisor: model=%s hit max_tokens (%d) before finishing.",
+                model,
+                config.MAX_TOKENS,
+            )
         break
 
     text = _extract_text(response.content)
