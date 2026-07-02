@@ -7,6 +7,7 @@ from being used by anyone but the portal.
 
 Anthropic + market data run here; the portal only renders the result.
 """
+import logging
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -17,6 +18,8 @@ import config
 from services import advisor, market
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Yuktera Stock Advisor Engine")
 
@@ -59,10 +62,15 @@ def recommend(profile: Profile, x_engine_key: Optional[str] = Header(default=Non
         "sectors": profile.sectors.strip(),
     }
 
+    model = config.resolve_model(profile.model)
     try:
-        result = advisor.recommend(enriched_profile, model=config.resolve_model(profile.model))
+        result = advisor.recommend(enriched_profile, model=model)
         picks = market.enrich(result.get("picks", []), chosen["suffix"])
     except Exception as exc:  # surface a clean error to the portal
+        # HTTPException is handled cleanly by Starlette, so nothing gets
+        # logged by default — log the full traceback ourselves or every
+        # failure here is a bare "502" with no way to tell what broke.
+        logger.exception("Stock Advisor: /recommend failed (model=%s)", model)
         raise HTTPException(status_code=502, detail=f"Engine error: {exc}")
 
     return {
