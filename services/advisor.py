@@ -8,11 +8,14 @@ appetite and budget. Returns structured picks (parsed from a JSON block).
 This is informational/educational only — NOT financial advice.
 """
 import json
+import logging
 import re
 
 import anthropic
 
 import config
+
+logger = logging.getLogger(__name__)
 
 _client = None
 
@@ -71,17 +74,54 @@ def _extract_text(content) -> str:
     return "".join(block.text for block in content if block.type == "text")
 
 
+def _iter_balanced_json(text: str):
+    """Yield every brace-balanced {...} span in text, left to right."""
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] == "{":
+            depth = 0
+            for j in range(i, n):
+                if text[j] == "{":
+                    depth += 1
+                elif text[j] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        yield text[i : j + 1]
+                        i = j
+                        break
+            else:
+                break
+        i += 1
+
+
 def _parse_picks(text: str) -> dict:
-    """Pull the JSON object out of the model's reply."""
-    match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-    raw = match.group(1) if match else None
-    if raw is None:
-        # Fall back to the first balanced-looking object in the text.
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        raw = match.group(0) if match else None
-    if raw is None:
-        raise ValueError("Model response did not contain a JSON block.")
-    return json.loads(raw)
+    """Pull the JSON object out of the model's reply.
+
+    The model isn't always consistent about emitting exactly one fenced JSON
+    block — it may add commentary, a schema example, or multiple candidate
+    blocks before the real answer. Collect every fenced ```json block and
+    every brace-balanced {...} span (not a greedy regex, which can span from
+    the first `{` to the last `}` in the whole response and grab unrelated
+    prose), then prefer the LAST one that parses with a "picks" key — the
+    model's final answer comes after any preamble or scratch work.
+    """
+    candidates = [m.group(1).strip() for m in re.finditer(r"```json\s*(.*?)```", text, re.DOTALL)]
+    candidates.extend(_iter_balanced_json(text))
+
+    for raw in reversed(candidates):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and "picks" in parsed:
+            return parsed
+
+    logger.error(
+        "Stock Advisor: no parseable JSON 'picks' block in model response. "
+        "First 1000 chars: %r",
+        text[:1000],
+    )
+    raise ValueError("Model response did not contain a parseable JSON block.")
 
 
 def recommend(profile: dict, model: str | None = None) -> dict:
